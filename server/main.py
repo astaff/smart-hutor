@@ -32,13 +32,10 @@ class Command(db.Model):
     pin = db.IntegerProperty()
     name = db.StringProperty()
     
-class QueueDev1(db.Model):
+class Queue(db.Model):
     command = db.ReferenceProperty(reference_class = Command, collection_name= 'queue_instances', name = "device1")
     id = db.IntegerProperty()
-
-class QueueThermWest(db.Model):
-    command = db.ReferenceProperty(reference_class = Command, collection_name= 'queue_instances2', name = "therm_west")
-    id = db.IntegerProperty()
+    dev_name = db.StringProperty()
 
 class MainHandler(webapp.RequestHandler):
     def get(self):
@@ -67,15 +64,13 @@ class DeviceCommandHandler(webapp.RequestHandler):
             self.error(403)
             return
         
-        # put command into the right queue for device
-        if node.name == 'device1':
-            q = QueueDev1()
-        else:
-            q = QueueThermWest()
+        # add command to the queue
+        q = Queue()
 
-        logging.info("Adding command '%s' to queue for device '%s'" % (tokens[3], tokens[2]));
+        logging.info("Adding command '%s' to queue for device '%s'" % (tokens[3], tokens[2]))
 
-        q.command = c
+        q.command  = c
+        q.dev_name = tokens[2]
         q.put()
 
 
@@ -93,16 +88,18 @@ class QueueCommandHandler(webapp.RequestHandler):
         # identify the queue
         if tokens[2] == "device1":
             #logging.info("Queue command handler: dev1")
-            items = QueueDev1.all()
-            q = QueueDev1
+            None
         elif tokens[2] == "therm_west":
             #logging.info("Queue command handler: therm_west")
-            items = QueueThermWest.all()
-            q = QueueThermWest
+            None
         else:
             logging.error("Unsupported queue " + tokens[2] + "in request " + s)
             self.error(403)
             return
+
+        # filter to only items destined for this device
+        items = Queue.all()
+        items.filter("dev_name = ", tokens[2])
 
         # process clear
         if tokens[3] == "all":
@@ -124,8 +121,7 @@ class QueueCommandHandler(webapp.RequestHandler):
         
 class CleanupHandler(webapp.RequestHandler):
     def get(self):
-        db.delete(QueueDev1.all())
-        db.delete(QueueThermWest.all())
+        db.delete(Queue.all())
         db.delete(Command.all())
         db.delete(Node.all())  
 
