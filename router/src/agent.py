@@ -10,6 +10,7 @@ import os
 from optparse import OptionParser
 import httplib
 import datetime
+import socket
 
 # the normal way would be to use pack, but it doesn't work properly on 
 # asus' processor
@@ -23,17 +24,18 @@ def int_to_str(source):
 pin_mappings = {0:'D0',1:'D1'}
 
 # default options
-base_url  = "smart-hutor.appspot.com"
+baseurl   = "smart-hutor.appspot.com"
 gpio      = "/proc/diag/led/wlan"
 gpio_mode = False
 sdevice   = "device1"
+interval  = 1
 
 parser = OptionParser()
 parser.add_option("-m", "--modem", dest="filename", 
                   help="Device path XBee is attached to", 
                   metavar="FILE")
 parser.add_option("-u", "--base-url", dest="baseurl", 
-                  help="Base URL for the application, without http:// prefix; default: " + base_url, 
+                  help="Base URL for the application, without http:// prefix; default: " + baseurl, 
                   metavar="URL")
 parser.add_option("-l", "--gpio-line", dest="gpio", 
                   help="File representing GPIO line, default: " + gpio, 
@@ -42,12 +44,14 @@ parser.add_option("-g", "--gpio-mode", dest="gpio_mode", action="store_true",
                   help="Run in GPIO mode, default is Zigbee mode")
 parser.add_option("-d", "--server-device", dest="sdevice", 
                   help="Device queue on the server, default:  " + sdevice)
+parser.add_option("-i", "--interval", dest="interval", type="int",
+                  help="Polling interval:  %s" % interval)
 
 
 (options, args) = parser.parse_args()
 
 if options.baseurl != None:
-    base_url = options.baseurl
+    baseurl = options.baseurl
 
 if options.gpio != None:
     gpio = options.gpio
@@ -57,6 +61,22 @@ if options.gpio_mode == True:
 
 if options.sdevice != None:
     sdevice = options.sdevice
+
+if options.interval != None:
+    interval = options.interval
+
+# print options summary
+print "Running with options:"
+if gpio_mode:
+    print "  gpio mode"
+    print "  gpio line = %s" % gpio
+else:
+    print "  zigbee mode"
+    print "  modem     = %s" % options.filename
+
+print     "  baseurl   = %s" % baseurl
+print     "  device    = %s" % sdevice
+print     "  interval  = %d" % interval
 
 # conditionally configure for zigbee 
 # hack:  zigbee router has simplejson, xbee and serial modules installed, GPIO router has regular json
@@ -78,46 +98,57 @@ else:
 
 # main loop
 while True :
-    connection = httplib.HTTPConnection(base_url)
-    connection.request("GET", "/queue/" + sdevice + "/all")
-    res = connection.getresponse()
+    try:
+        connection = httplib.HTTPConnection(baseurl)
+        connection.request("GET", "/queue/" + sdevice + "/all")
+        res = connection.getresponse()
 
-    if (res.status == 200):
-        s = res.read()
-        queue = json.loads(s)
+        if (res.status == 200):
+            s = res.read()
+            queue = json.loads(s)
 
-        # only clear queue if messages were retrieved from it
-        if len(queue):
-            connection.request("GET", "/queue/" + sdevice + "/clear")
-            connection.getresponse()
+            # only clear queue if messages were retrieved from it
+            if len(queue):
+                connection.request("GET", "/queue/" + sdevice + "/clear")
+                connection.getresponse()
 
-        now = datetime.datetime.now()
-        
-        for item in queue:      
+            now = datetime.datetime.now()
 
-            # log the action taken
-            if item[1] == 0:
-                print "%s: switching to high" % now
-            else:
-                print "%s: switching to low" % now
+            for item in queue:      
 
-            if not gpio_mode:
-                # addr2 = '\x00\x13\xa2\x00\x40\x3b\xc5\x3a'
-                addr = int_to_str(item[0])
-                xbee.remote_at(dest_addr_long=addr, command=pin_mappings[item[1]], parameter='\x05')
-                time.sleep(0.5)        
-                xbee.remote_at(dest_addr_long=addr, command=pin_mappings[item[1]], parameter='\x04')
-                time.sleep(0.2)                
-            else:
+                # log the action taken
                 if item[1] == 0:
-                    ret = os.system("echo 1 > " + gpio)
+                    print "%s: switching to high" % now
+                    resp = "/ack_on"
                 else:
-                    ret = os.system("echo 0 > " + gpio)
+                    print "%s: switching to low" % now
+                    resp = "/ack_off"
 
-                if ret:
-                    print "Error setting the GPIO line"
+                if not gpio_mode:
+                    # addr2 = '\x00\x13\xa2\x00\x40\x3b\xc5\x3a'
+                    addr = int_to_str(item[0])
+                    xbee.remote_at(dest_addr_long=addr, command=pin_mappings[item[1]], parameter='\x05')
+                    time.sleep(0.5)        
+                    xbee.remote_at(dest_addr_long=addr, command=pin_mappings[item[1]], parameter='\x04')
+                    time.sleep(0.2)                
+                else:
+                    if item[1] == 0:
+                        ret = os.system("echo 1 > " + gpio)
+                    else:
+                        ret = os.system("echo 0 > " + gpio)
 
-    time.sleep(1)
+                    if ret:
+                        print "Error setting the GPIO line"
+                
+                # ack the state transition back to the server
+                connection.request("GET", "/state/" + sdevice + resp)
+                connection.getresponse()
+
+        time.sleep(interval)
+
+    except socket.error as (e, s):
+        print "Exception occurred: '%s [%d]'.  Waiting 10 seconds and retrying." % (s, e)
+        time.sleep(10)
 
 if not gpio_mode:    
     ser.close()

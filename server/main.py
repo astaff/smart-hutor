@@ -26,6 +26,7 @@ from django.utils import simplejson
 class Node(db.Model):
     address = db.IntegerProperty()
     name = db.StringProperty()
+    on_state = db.BooleanProperty()
     
 class Command(db.Model):
     node = db.ReferenceProperty(reference_class = Node, collection_name = 'commands')
@@ -118,6 +119,36 @@ class QueueCommandHandler(webapp.RequestHandler):
           
         self.response.out.write(simplejson.dumps(results))
 
+class StateHandler(webapp.RequestHandler):
+    def get(self):
+
+        s = self.request.path
+        tokens = s.split('/')
+
+        if len(tokens) < 4: 
+            logging.error("Unsupported device request " + s)
+            self.error(403)
+            return 
+            
+        node = Node.all().filter('name =', tokens[2]).get()
+        if node == None :
+            logging.error("Unsupported device " + tokens[2] + " in request " + s)           
+            self.error(403)
+            return
+        
+        if tokens[3] == "ack_on":
+            logging.info("Device '%s' state was acked as ON" % tokens[2])
+            node.on_state = True
+        elif tokens[3] == "ack_off":
+            logging.info("Device '%s' state was acked as OFF" % tokens[2])
+            node.on_state = False
+        elif tokens[3] == "get":
+            None
+        else:
+            logging.error("Unsupported state request " + tokens[2] + "in request " + s)
+            return
+
+        self.response.out.write(simplejson.dumps(node.on_state)) 
         
 class CleanupHandler(webapp.RequestHandler):
     def get(self):
@@ -127,12 +158,12 @@ class CleanupHandler(webapp.RequestHandler):
 
 class SetupHandler(webapp.RequestHandler):
     def get(self):
-        newNode = Node(address = int("0x0013a200403bc53a", 0), name = 'device1')
+        newNode = Node(address = int("0x0013a200403bc53a", 0), name = 'device1', on_state = False)
         newNode.put()
         Command(node = newNode, pin = 0, name = "on").put()  
         Command(node = newNode, pin = 1, name = "off").put()
 
-        newNode2 = Node(address = int("0x0013a200403bc53b", 0), name = 'therm_west')
+        newNode2 = Node(address = int("0x0013a200403bc53b", 0), name = 'therm_west', on_state = False)
         newNode2.put()
         Command(node = newNode2, pin = 0, name = "on").put()  
         Command(node = newNode2, pin = 1, name = "off").put()
@@ -141,10 +172,12 @@ def main():
     # supported URLs:
     # /device/[device1|therm_west]/[on|off]
     # /queue/[device1|therm_west]/[all|clear]
+    # /state/[device1|therm_west]/[ack_on|ack_off|get]
 
     application = webapp.WSGIApplication([
                                           ('/dev/.*', DeviceCommandHandler),
                                           ('/queue/.*',  QueueCommandHandler),
+                                          ('/state/.*',  StateHandler),
                                           ('/cleanup', CleanupHandler),
                                           ('/setup', SetupHandler)
                                           ],
