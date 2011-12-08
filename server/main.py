@@ -57,9 +57,10 @@ class CacheHandler:
         results = memcache.get(key = key)
         
         if (results != None):
-            logging.info("Cache hit: %s" % key)
+            None
+            # logging.info("Cache hit: %s" % key)
         else:
-            logging.info("Cache miss: %s" % key)
+            # logging.info("Cache miss: %s" % key)
             items = self.cache_mappings[name].all()
             results = [];
             
