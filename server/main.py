@@ -21,7 +21,7 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp import util
 from google.appengine.ext import db
 from django.utils import simplejson
-
+from google.appengine.api import memcache
 
 class Node(db.Model):
     address = db.IntegerProperty()
@@ -41,6 +41,37 @@ class Queue(db.Model):
 class MainHandler(webapp.RequestHandler):
     def get(self):
         self.response.out.write('Hello world!!!')
+        
+class CacheHandler:
+    cache_mappings = {"queue" : Queue, "node" : Node}
+
+    def get_key(self, name, operator, value):
+        return "_data_" + name + "_" + operator + "_" + value
+        
+    def invalidate(self):
+        memcache.flush_all()
+
+    def get(self, name, operator, value):
+        
+        key = self.get_key(name, operator, value)
+        results = memcache.get(key = key)
+        
+        if (results != None):
+            logging.info("Cache hit: %s" % key)
+        else:
+            logging.info("Cache miss: %s" % key)
+            items = self.cache_mappings[name].all()
+            results = [];
+            
+            if (operator != None):
+                items.filter(operator, value)
+                
+            for item in items:
+                results.append(item)
+                        
+            memcache.set(key = key, value = results)
+            
+        return results                
 
 class DeviceCommandHandler(webapp.RequestHandler):
     def get(self):
@@ -73,6 +104,7 @@ class DeviceCommandHandler(webapp.RequestHandler):
         q.command  = c
         q.dev_name = tokens[2]
         q.put()
+        cache.invalidate()
 
 
 class QueueCommandHandler(webapp.RequestHandler):
@@ -99,8 +131,9 @@ class QueueCommandHandler(webapp.RequestHandler):
             return
 
         # filter to only items destined for this device
-        items = Queue.all()
-        items.filter("dev_name = ", tokens[2])
+        # items = Queue.all()
+        items = cache.get("queue", "dev_name = ", tokens[2])
+        # items.filter("dev_name = ", tokens[2])
 
         # process clear
         if tokens[3] == "all":
@@ -111,6 +144,7 @@ class QueueCommandHandler(webapp.RequestHandler):
         elif tokens[3] == "clear":
             #logging.info("Queue command handler: clear")
             db.delete(items)
+            cache.invalidate()
             
         else:
             logging.error("Unsupported action " + tokens[3] + "in request " + s)
@@ -130,24 +164,33 @@ class StateHandler(webapp.RequestHandler):
             self.error(403)
             return 
             
-        node = Node.all().filter('name =', tokens[2]).get()
+        # node = Node.all().filter('name =', tokens[2]).get()
+        items = cache.get("node", "name = ", tokens[2])
+        
+        if (len(items) == 1):
+            node = items[0]
+        
         if node == None :
             logging.error("Unsupported device " + tokens[2] + " in request " + s)           
             self.error(403)
             return
         
-        if tokens[3] == "ack_on":
-            logging.info("Device '%s' state was acked as ON" % tokens[2])
-            node.on_state = True
-        elif tokens[3] == "ack_off":
-            logging.info("Device '%s' state was acked as OFF" % tokens[2])
-            node.on_state = False
-        elif tokens[3] == "get":
+        if tokens[3] == "get":
             None
         else:
-            logging.error("Unsupported state request " + tokens[2] + "in request " + s)
-            return
-
+            if tokens[3] == "ack_on":
+                logging.info("Device '%s' state was acked as ON" % tokens[2])
+                node.on_state = True
+            elif tokens[3] == "ack_off":
+                logging.info("Device '%s' state was acked as OFF" % tokens[2])
+                node.on_state = False
+            else:
+                logging.error("Unsupported state request " + tokens[2] + "in request " + s)
+                return
+   
+            node.put()
+            cache.invalidate()
+        
         self.response.out.write(simplejson.dumps(node.on_state)) 
         
 class CleanupHandler(webapp.RequestHandler):
@@ -167,6 +210,8 @@ class SetupHandler(webapp.RequestHandler):
         newNode2.put()
         Command(node = newNode2, pin = 0, name = "on").put()  
         Command(node = newNode2, pin = 1, name = "off").put()
+        
+cache = CacheHandler()
 
 def main():   
     # supported URLs:

@@ -21,7 +21,7 @@ def int_to_str(source):
         source >>= 8
     return s
 
-pin_mappings = {0:'D0',1:'D1'}
+pin_mappings = {0:'D0',1:'D1',2:'D2'}
 
 # default options
 baseurl   = "smart-hutor.appspot.com"
@@ -127,10 +127,14 @@ while True :
                 if not gpio_mode:
                     # addr2 = '\x00\x13\xa2\x00\x40\x3b\xc5\x3a'
                     addr = int_to_str(item[0])
+                    xbee.remote_at(dest_addr_long=addr, command=pin_mappings[2], parameter='\x05')
+                    time.sleep(0.2) 
                     xbee.remote_at(dest_addr_long=addr, command=pin_mappings[item[1]], parameter='\x05')
                     time.sleep(0.5)        
                     xbee.remote_at(dest_addr_long=addr, command=pin_mappings[item[1]], parameter='\x04')
                     time.sleep(0.2)                
+                    xbee.remote_at(dest_addr_long=addr, command=pin_mappings[2], parameter='\x04')
+                    time.sleep(0.2) 
                 else:
                     if item[1] == 0:
                         ret = os.system("echo 1 > " + gpio)
