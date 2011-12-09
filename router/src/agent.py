@@ -30,6 +30,8 @@ gpio_mode = False
 sdevice   = "device1"
 interval  = 1
 
+xbee = None 
+
 parser = OptionParser()
 parser.add_option("-m", "--modem", dest="filename", 
                   help="Device path XBee is attached to", 
@@ -89,10 +91,10 @@ if not gpio_mode:
         print "--modem=PATH is required. Please provide a full device path to the serial port XBee is attached to"
         os._exit(0)
 
-        ser = serial.Serial(options.filename, 9600)
-        time.sleep(0.2)
+    ser = serial.Serial(options.filename, 9600)
+    time.sleep(0.2)
 
-        xbee = ZigBee(ser)
+    xbee = ZigBee(ser)
 else:
     import json
 
@@ -145,6 +147,7 @@ while True :
                         print "Error setting the GPIO line"
                 
                 # ack the state transition back to the server
+                connection = httplib.HTTPConnection(baseurl)
                 connection.request("GET", "/state/" + sdevice + resp)
                 connection.getresponse()
 
