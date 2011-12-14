@@ -65,7 +65,7 @@ class CacheHandler:
             results = [];
             
             if (operator != None):
-                items.filter(operator, value)
+                items = items.filter(operator, value)
                 
             for item in items:
                 results.append(item)
@@ -167,6 +167,7 @@ class StateHandler(webapp.RequestHandler):
             
         # node = Node.all().filter('name =', tokens[2]).get()
         items = cache.get("node", "name = ", tokens[2])
+        node = None
         
         if (len(items) == 1):
             node = items[0]

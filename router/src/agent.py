@@ -30,6 +30,7 @@ gpio_mode = False
 sdevice   = "device1"
 interval  = 1
 
+
 xbee = None 
 
 parser = OptionParser()
