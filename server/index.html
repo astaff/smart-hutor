@@ -1,0 +1,175 @@
+<HTML>
+
+<script type="text/javascript">
+<!--
+// return the value of the radio button that is checked
+// return an empty string if none are checked, or
+// there are no radio buttons
+function getCheckedValue(radioObj) {
+	if(!radioObj)
+		return "";
+	var radioLength = radioObj.length;
+	if(radioLength == undefined)
+		if(radioObj.checked)
+			return radioObj.value;
+		else
+			return "";
+	for(var i = 0; i < radioLength; i++) {
+		if(radioObj[i].checked) {
+			return radioObj[i].value;
+		}
+	}
+	return "";
+}
+
+// set the radio button with the given value as being checked
+// do nothing if there are no radio buttons
+// if the given value does not exist, all the radio buttons
+// are reset to unchecked
+function setCheckedValue(radioObj, newValue) {
+	if(!radioObj)
+		return;
+	var radioLength = radioObj.length;
+	if(radioLength == undefined) {
+		radioObj.checked = (radioObj.value == newValue.toString());
+		return;
+	}
+	for(var i = 0; i < radioLength; i++) {
+		radioObj[i].checked = false;
+		if(radioObj[i].value == newValue.toString()) {
+			radioObj[i].checked = true;
+		}
+	}
+}
+
+// set the radio button with the given value as being checked
+// do nothing if there are no radio buttons
+// if the given value does not exist, all the radio buttons
+// are reset to unchecked
+function getThermStatus(dev) {
+    var req      = new XMLHttpRequest();
+    var base_url = location.href;
+    
+    i = base_url.lastIndexOf('/');
+    if (i != -1) {
+        base_url = base_url.substr(0,i);
+    } 
+
+    url = base_url + '/state/' + dev + '/get';
+
+    //console.log(url);
+    req.open('GET', url, false);
+    req.send(null);
+    //console.log(req.status);
+    //console.log(req.responseText);
+
+    if (req.status != 200) {
+        alert("Unable to communicate with the server!");
+        return;
+    }
+    
+    if (req.responseText == "true") {
+        return "on";
+    } else {
+        return "off";
+    }
+}
+
+function setThermStatus(dev, state) {
+    var req      = new XMLHttpRequest();
+    var base_url = location.href;
+    
+    i = base_url.lastIndexOf('/');
+    if (i != -1) {
+        base_url = base_url.substr(0,i);
+    } 
+
+    url = base_url + '/dev/' + dev + '/' + state;
+
+    //console.log(url);
+    req.open('GET', url, false);
+    req.send(null);
+    //console.log(req.status);
+    //console.log(req.responseText);    
+
+    if (req.status != 200) {
+        alert("Unable to communicate with the server!");
+        return;
+    }
+}
+
+
+function refrStatus(dev) {
+    setCheckedValue(document.forms['thermo'].elements[dev], getThermStatus(dev))
+}
+
+function refrStatusAll() {
+    refrStatus('device1');
+    refrStatus('therm_west');
+}
+
+function set(dev, but) {
+    document.getElementById(but).disabled = true;    
+
+    req_val = getCheckedValue(document.forms['thermo'].elements[dev]);
+    if (req_val != "off" && req_val != "on") {
+        alert("Invalid state set");
+    }
+    setThermStatus(dev, req_val);
+    
+    // wait for new value for 5 seconds
+    ms_start = new Date().getTime();
+    while (1) {
+        ack_val = getThermStatus(dev);
+        if (ack_val == req_val) {
+            break;
+        }
+                
+        ms_end = new Date().getTime();
+        if (ms_end - ms_start > 5000) {
+           alert("Set request did not get acknowledged within 5 seconds, router might be down", "SmartHutor Error");
+           refrStatus(dev);
+           break;
+        }
+        
+        // sleep for a 500 mS
+        while (1) {
+            ms_sleep = new Date().getTime();
+            if (ms_sleep - ms_end > 500) {
+                break;
+            }
+        }
+        
+    }
+
+    document.getElementById(but).disabled = false;
+}
+
+//-->
+</script>
+
+<TITLE>Smart Hutor</TITLE>
+<BODY onload="refrStatusAll();">
+<H1>Smart Hutor Controls</H1>
+
+<form name="thermo">
+<H3>Thermostats</H3>
+Le Grand Hutor<br>
+off<input type="radio" name="device1" value="off">
+on<input  type="radio" name="device1" value="on">
+<input type="button" id="bn_device1"  value="Set" onclick="set('device1', 'bn_device1');">
+<p>
+
+Le Petit Hutor<br>
+off<input type="radio" name="therm_west" value="off">
+on<input type="radio" name="therm_west" value="on">
+<input type="button" id="bn_therm_west"  value="Set" onclick="set('therm_west', 'bn_therm_west');">
+<p>
+
+</thermo>
+
+<input type="button" id="refr_button" value="Refresh" onClick="refrStatusAll();">
+
+
+</BODY>
+</HTML>

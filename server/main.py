@@ -60,9 +60,9 @@ class CacheHandler:
             None
             # logging.info("Cache hit: %s" % key)
         else:
-            # logging.info("Cache miss: %s" % key)
+            # logging.info("Cache miss: %s name = %s" % (key, name))
             items = self.cache_mappings[name].all()
-            results = [];
+            results = []
             
             if (operator != None):
                 items = items.filter(operator, value)
@@ -169,8 +169,10 @@ class StateHandler(webapp.RequestHandler):
         items = cache.get("node", "name = ", tokens[2])
         node = None
         
-        if (len(items) == 1):
+        if (len(items) >= 1):
             node = items[0]
+            if len(items) > 1:
+                logging.error("Unexepected number of nodes found for device %s, expect 1, got %d" % (tokens[2], len(items)))
         
         if node == None :
             logging.error("Unsupported device " + tokens[2] + " in request " + s)           
@@ -216,6 +218,11 @@ class SetupHandler(webapp.RequestHandler):
 cache = CacheHandler()
 
 def main():   
+
+    # on startup, re-run cleanup & setup nodes
+    CleanupHandler()
+    SetupHandler()
+
     # supported URLs:
     # /device/[device1|therm_west]/[on|off]
     # /queue/[device1|therm_west]/[all|clear]
@@ -233,10 +240,6 @@ def main():
 #    application = webapp.WSGIApplication([('/', MainHandler)],
 #                                         debug=True)
     
-    # on startup, re-run cleanup & setup nodes
-    CleanupHandler()
-    SetupHandler()
-
     util.run_wsgi_app(application)
 
 
