@@ -112,7 +112,11 @@ function set(dev, but) {
     document.getElementById(but).disabled = true;    
 
     req_val = getCheckedValue(document.forms['thermo'].elements[dev]);
-    if (req_val != "off" && req_val != "on") {
+    if (req_val == "off") {
+        req_val = "on";
+    } else if (req_val == "on") {
+        req_val = "off";
+    } else {
         alert("Invalid state set");
     }
     setThermStatus(dev, req_val);
@@ -128,7 +132,6 @@ function set(dev, but) {
         ms_end = new Date().getTime();
         if (ms_end - ms_start > 5000) {
            alert("Set request did not get acknowledged within 5 seconds, router might be down", "SmartHutor Error");
-           refrStatus(dev);
            break;
         }
         
@@ -138,10 +141,10 @@ function set(dev, but) {
             if (ms_sleep - ms_end > 500) {
                 break;
             }
-        }
-        
+        }        
     }
 
+    refrStatus(dev);
     document.getElementById(but).disabled = false;
 }
 
@@ -155,15 +158,15 @@ function set(dev, but) {
 <form name="thermo">
 <H3>Thermostats</H3>
 Le Grand Hutor<br>
-low<input type="radio" name="device1" value="off">
-high<input  type="radio" name="device1" value="on">
-<input type="button" id="bn_device1"  value="Set" onclick="set('device1', 'bn_device1');">
+low<input type="radio" name="device1" value="off" disabled>
+high<input  type="radio" name="device1" value="on" disabled>
+<input type="button" id="bn_device1"  value="Toggle" onclick="set('device1', 'bn_device1');">
 <p>
 
 Le Petit Hutor<br>
-low<input type="radio" name="therm_west" value="off">
-high<input type="radio" name="therm_west" value="on">
-<input type="button" id="bn_therm_west"  value="Set" onclick="set('therm_west', 'bn_therm_west');">
+low<input type="radio" name="therm_west" value="off" disabled>
+high<input type="radio" name="therm_west" value="on" disabled>
+<input type="button" id="bn_therm_west"  value="Toggle" onclick="set('therm_west', 'bn_therm_west');">
 <p>
 
 </thermo>
